@@ -10,110 +10,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. سحب كود المستودع
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. إعداد بيئة Java
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Generate Gradle Project Structure
-        run: |
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/java/com/hazemtech/v2app
-
-          cat << 'EOF' > settings.gradle
-          include ':app'
-          EOF
-
-          cat << 'EOF' > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOF
-
-          cat << 'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-          android {
-              namespace 'com.hazemtech.v2app'
-              compileSdk 33
-              defaultConfig {
-                  applicationId "com.hazemtech.v2app"
-                  minSdk 21
-                  targetSdk 33
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:label="HazemTech Pro"
-                  android:supportsRtl="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center">
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="HazemTech Pro V2"
-                  android:textSize="24sp" />
-          </LinearLayout>
-          EOF
-
-          cat << 'EOF' > app/src/main/java/com/hazemtech/v2app/MainActivity.java
-          package com.hazemtech.v2app;
-
-          import android.app.Activity;
-          import android.os.Bundle;
-
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          EOF
-
-      - name: Build APK with Android Action
-        uses: gradle/gradle-build-action@v3
+      # 3. إعداد Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          arguments: assembleDebug
+          channel: 'stable'
 
-      - name: Upload APK
+      # 4. إنشاء هيكل مشروع Flutter كامل تلقائياً
+      - name: Generate Complete Flutter Project
+        run: |
+          # إنشاء مشروع محلي مؤقت
+          flutter create temp_app --org com.hazemtech.v2app
+          
+          # نقل ملفات البناء الأساسية إلى المستودع
+          cp -r temp_app/android ./
+          cp temp_app/pubspec.yaml ./
+          mkdir -p lib
+          
+          # إذا كان main.dart موجـوداً يتم حفظه، وإلا يتم إنشاء الكود الأساسي
+          if [ -f "main.dart" ]; then
+            cp main.dart lib/main.dart
+          elif [ ! -f "lib/main.dart" ]; then
+            cp temp_app/lib/main.dart lib/main.dart
+          fi
+
+      # 5. تنزيل التبعيات والتجميع
+      - name: Install Dependencies & Build APK
+        run: |
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+
+      # 6. رفع ملف الـ APK النهائي لتنزيله
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HazemTech-App-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: HazemTech-Pro-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
